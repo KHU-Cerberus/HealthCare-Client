@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 class HomePage extends StatelessWidget{
-  final String username;
+  final String token;
 
-  const HomePage({super.key, required this.username});
+  const HomePage({super.key, required this.token});
 
   @override
   Widget build(BuildContext context) {
