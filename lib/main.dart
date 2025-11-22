@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:health_care/presentation/pages/login/login.dart';
+import 'package:health_care/presentation/login/login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
