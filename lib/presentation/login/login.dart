@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:health_care/presentation/home/home.dart';
 import 'package:health_care/presentation/login/register.dart';
 import 'package:health_care/feature/user/repository.dart';
-import 'package:health_care/style/colors.dart';
+import 'package:health_care/presentation/style/colors.dart';
+import 'package:health_care/presentation/login/sleeping_pattern.dart';
 import 'package:dio/dio.dart';
 
 class LoginPage extends StatelessWidget {
@@ -65,12 +66,27 @@ class LoginPage extends StatelessWidget {
         }
         
         _showSnackBar(context, '로그인 성공!', isError: false);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HomePage(token: jwt),
-          ),
-        );
+        
+        if (response.data.containsKey('sleeping_pattern')){
+          if (response.data['sleeping_pattern']) {
+            // 수면 패턴이 이미 설정된 경우 홈 페이지로 이동
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HomePage(baseUrl: baseUrl, jwt: jwt),
+              ),
+            );
+          } else {
+            // 수면 패턴이 설정되지 않은 경우 수면 패턴 페이지로 이동
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SleepingPatternPage(baseUrl: baseUrl, jwt: jwt),
+              ),
+            );
+          }
+        }
+        
       } else {
         _showSnackBar(context, '로그인 실패: 알 수 없는 오류가 발생했습니다.', isError: true);
       }
