@@ -15,3 +15,4 @@ class DisplayPictureScreen extends StatelessWidget {
     );
   }
 }
+
