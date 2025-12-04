@@ -1,36 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:health_care/presentation/report/health_report.dart';
 import 'package:health_care/presentation/setting/setting_home.dart';
 import 'package:health_care/presentation/home/home.dart';
-import 'package:health_care/presentation/calendar/calendar.dart';
-import 'package:health_care/presentation/style/colors.dart';
 
-class HealthReportPage extends StatefulWidget {
-  final String jwt;
+class CalendarPage extends StatefulWidget {
   final String baseUrl;
-  const HealthReportPage({super.key, required this.baseUrl, required this.jwt});
+  final String jwt;
+
+
+  const CalendarPage({super.key, required this.baseUrl, required this.jwt});
 
   @override
-  State<HealthReportPage> createState() => _HealthReportPageState();
+  State<CalendarPage> createState() => _CalendarPageState();
 }
 
-class _HealthReportPageState extends State<HealthReportPage> {
+class _CalendarPageState extends State<CalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Health Report',
-          style: TextStyle(color: blackColor),
-          ),
+        title: const Text('Calander'),
       ),
-      body: const Center(
-        child: Text('Health Report Content Goes Here'),
+      body: Center(
+        child: Text('Calander Page - Base URL: $widget.baseUrl'),
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
-        currentIndex: 1,
+        currentIndex: 2,
         onTap: (index) {
           switch (index) {
       case 0:
@@ -46,7 +44,16 @@ class _HealthReportPageState extends State<HealthReportPage> {
         );
         break;
       case 1:
-        // 현재 페이지
+        // 통계 페이지로 이동
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HealthReportPage(
+              baseUrl: widget.baseUrl,
+              jwt: widget.jwt,
+            ),
+          ),
+        );
         break;
       case 2:
         // 캘린더 페이지로 이동

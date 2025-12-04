@@ -12,4 +12,9 @@ abstract class UserRepo {
   @POST('/auth/register')
   Future<HttpResponse> register(@Body() Map<String, dynamic> body);
   
+  @GET('/user/home')
+  Future<HttpResponse> getUserHome(@Header('Authorization') String token);
+
+  @GET('/user/home/advice/{type}')
+  Future<HttpResponse> getUserAdvice(@Header('Authorization') String token);
 }
