@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:health_care/presentation/home/home.dart';
 import 'package:health_care/presentation/login/register.dart';
-import 'package:health_care/feature/user/user_client.dart';
 import 'package:health_care/presentation/style/colors.dart';
 import 'package:health_care/presentation/login/sleeping_pattern.dart';
 import 'package:dio/dio.dart';
-import 'package:health_care/presentation/food/camera.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class LoginPage extends StatelessWidget {
-  final TextEditingController _userIDController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+class LoginPage extends StatefulWidget {
   final String baseUrl;
 
-  LoginPage({super.key, required this.baseUrl});
+  const LoginPage({super.key, required this.baseUrl});
 
-  void _showSnackBar(BuildContext context, String message, {bool isError = true}) {
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  void _showSnackBar(String message, {bool isError = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -24,96 +30,130 @@ class LoginPage extends StatelessWidget {
     );
   }
 
-  void _login(BuildContext context) async {
-    final userID = _userIDController.text.trim();
+  Future<void> _saveTokens(String accessToken, String refreshToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('accessToken', accessToken);
+    await prefs.setString('refreshToken', refreshToken);
+    print('토큰 저장 완료');
+  }
+
+  void _login() async {
+    final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    
-    if (userID.isEmpty || password.isEmpty) {
-      _showSnackBar(context, 'ID와 비밀번호를 입력해주세요.', isError: true);
+
+    if (email.isEmpty || password.isEmpty) {
+      _showSnackBar('이메일과 비밀번호를 입력해주세요', isError: true);
       return;
     }
 
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      // Dio 인스턴스를 baseUrl로 초기화하여 생성
       final dio = Dio(BaseOptions(
-        baseUrl: baseUrl,
+        baseUrl: widget.baseUrl,
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
       ));
-      
-      print('Login 요청 전송: $baseUrl/login');
-      print('요청 데이터: user_id=$userID, password=***');
-      
-      final response = await UserRepo(dio, baseUrl: baseUrl).login({
-        'user_id': userID,
-        'password': password,
-      });
-      
-      print('응답 상태 코드: ${response.response.statusCode}');
-      print('응답 데이터: ${response.data}');
-      print('응답 데이터 타입: ${response.data.runtimeType}');
 
-      if (response.response.statusCode == 200 || response.response.statusCode == 201) {
-        // 서버 응답이 JSON 객체인 경우 {"token": "..."} 또는 JWT 문자열 자체인 경우 처리
-        String jwt;
-        if (response.data is Map && response.data.containsKey('token')) {
-          jwt = response.data["token"] as String;
-        } else if (response.data is String) {
-          // JWT 문자열이 직접 반환되는 경우
-          jwt = response.data as String;
-        } else {
-          _showSnackBar(context, '로그인 실패: 토큰을 받을 수 없습니다.', isError: true);
-          return;
-        }
-        
-        _showSnackBar(context, '로그인 성공!', isError: false);
-        if (response.data['data'].containsKey('sleeping_pattern')){
-          if (response.data['sleeping_pattern']) {
-            // 수면 패턴이 이미 설정된 경우 홈 페이지로 이동
+      print('Login 요청 전송: ${widget.baseUrl}/auth/login');
+      print('요청 데이터: email=$email');
+
+      final response = await dio.post(
+        '/auth/login',
+        data: {
+          'email': email,
+          'password': password,
+        },
+      );
+
+      print('응답 상태 코드: ${response.statusCode}');
+      print('응답 데이터: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final data = response.data['data'];
+        final accessToken = data['accessToken'] as String;
+        final refreshToken = data['refreshToken'] as String;
+        final grantType = data['grantType'] as String;
+
+        // 토큰 저장
+        await _saveTokens(accessToken, refreshToken);
+
+        _showSnackBar('로그인 성공!', isError: false);
+
+        // sleeping_pattern 확인 후 화면 이동
+        if (data.containsKey('sleeping_pattern')) {
+          final sleepingPattern = data['sleeping_pattern'];
+
+          if (sleepingPattern == true) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => HomePage(baseUrl: baseUrl, jwt: jwt),
+                builder: (context) => HomePage(baseUrl: widget.baseUrl, jwt: accessToken),
               ),
             );
           } else {
-            // 수면 패턴이 설정되지 않은 경우 수면 패턴 페이지로 이동
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => SleepingPatternPage(baseUrl: baseUrl, jwt: jwt),
+                builder: (context) => SleepingPatternPage(baseUrl: widget.baseUrl, jwt: accessToken),
               ),
             );
           }
+        } else {
+          // sleeping_pattern이 없으면 SleepingPatternPage로 이동
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SleepingPatternPage(baseUrl: widget.baseUrl, jwt: accessToken),
+            ),
+          );
         }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CameraPage(baseUrl: baseUrl, jwt: jwt),
-          ),
-        );
-      } else {
-        _showSnackBar(context, '로그인 실패: 알 수 없는 오류가 발생했습니다.', isError: true);
       }
     } on DioException catch (e) {
-      // Dio 에러 처리 (네트워크 오류, 4xx, 5xx 등의 HTTP 에러)
       print('DioException 발생: ${e.type}');
       print('에러 메시지: ${e.message}');
       print('응답 상태: ${e.response?.statusCode}');
       print('응답 데이터: ${e.response?.data}');
+
+      String errorMessage = '로그인에 실패했습니다.';
+
+      if (e.response != null && e.response!.data != null) {
+        if (e.response!.data is Map && e.response!.data.containsKey('message')) {
+          errorMessage = e.response!.data['message'] as String;
+        } else if (e.response!.data is String) {
+          errorMessage = e.response!.data as String;
+        }
+
+        // 401: 인증 실패
+        if (e.response!.statusCode == 401) {
+          errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.';
+        }
+      } else if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        errorMessage = '서버 연결 시간이 초과되었습니다.';
+      } else if (e.type == DioExceptionType.connectionError) {
+        errorMessage = '서버에 연결할 수 없습니다: ${widget.baseUrl}';
+      }
+
+      _showSnackBar(errorMessage, isError: true);
     } catch (e, stackTrace) {
-      // 기타 예상치 못한 에러 처리
       print('예상치 못한 오류: $e');
       print('스택 트레이스: $stackTrace');
-      _showSnackBar(context, '예상치 못한 오류: $e', isError: true);
+      _showSnackBar('예상치 못한 오류: $e', isError: true);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  void _register(BuildContext context) {
+  void _register() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => RegisterPage(baseUrl: baseUrl),
+        builder: (context) => RegisterPage(baseUrl: widget.baseUrl),
       ),
     );
   }
@@ -121,7 +161,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar 삭제 또는 변경 (이미지에는 AppBar가 보이지 않거나 타이틀만 있음)
+      backgroundColor: whiteColor,
       appBar: AppBar(
         title: const Text(
           "로그인",
@@ -134,73 +174,198 @@ class LoginPage extends StatelessWidget {
         backgroundColor: whiteColor,
         elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ID 입력 필드
-            TextField(
-              controller: _userIDController,
-              decoration: const InputDecoration(
-                labelText: '아이디',
-                border: OutlineInputBorder(), 
-                contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 비밀번호 입력 필드
-            TextField(
-              controller: _passwordController,
-              obscureText: true, // 비밀번호 가리기
-              decoration: const InputDecoration(
-                labelText: '비밀번호',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
-              ),
-            ),
-            const SizedBox(height: 24), // 간격 조정
-            
-            // 1. 로그인 버튼 (배경: 검은색, 텍스트: 흰색)
-            ElevatedButton(
-              onPressed: () => _login(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: blackColor, // 배경색 검은색
-                foregroundColor: whiteColor, // 텍스트 색상 흰색
-                minimumSize: const Size(double.infinity, 50), // 버튼 높이 설정 및 폭 최대화
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(4)), // 모서리 둥글기 제거 또는 조정
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 40),
+
+              // 환영 메시지
+              const Text(
+                '환영합니다',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: blackColor,
                 ),
-                elevation: 0, // 그림자 제거
               ),
-              child: const Text(
-                '로그인',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // 2. 회원가입 버튼 (배경: 흰색, 테두리: 검은색, 텍스트: 검은색)
-            ElevatedButton(
-              onPressed: () => _register(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: whiteColor, // 배경색 흰색
-                foregroundColor: blackColor, // 텍스트 색상 검은색
-                minimumSize: const Size(double.infinity, 50), // 버튼 높이 설정 및 폭 최대화
-                shape: RoundedRectangleBorder(
-                  borderRadius: const BorderRadius.all(Radius.circular(4)),
-                  side: BorderSide(color: blackColor, width: 1), // 검은색 테두리 추가
+              const SizedBox(height: 8),
+              Text(
+                '계정에 로그인하세요',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
                 ),
-                elevation: 0, // 그림자 제거
               ),
-              child: const Text(
-                '회원가입',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const SizedBox(height: 48),
+
+              // 이메일 입력
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: '이메일',
+                  hintText: 'example@email.com',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[600]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: blackColor, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+
+              // 비밀번호 입력
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: '비밀번호',
+                  hintText: '비밀번호를 입력하세요',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: blackColor, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // 비밀번호 찾기
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    // TODO: 비밀번호 찾기 화면으로 이동
+                    // 영원히 안할듯
+                  },
+                  child: Text(
+                    '비밀번호를 잊으셨나요?',
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // 로그인 버튼
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: blackColor,
+                    foregroundColor: whiteColor,
+                    disabledBackgroundColor: blackColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          '로그인',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 구분선
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      '또는',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 회원가입 버튼
+              SizedBox(
+                height: 56,
+                child: OutlinedButton(
+                  onPressed: _register,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: whiteColor,
+                    foregroundColor: grayColor,
+                    side: BorderSide(color: grayColor, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    '회원가입',
+                    style: TextStyle(
+                      color: darkGrayColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }

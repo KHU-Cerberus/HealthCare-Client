@@ -6,10 +6,10 @@ part 'user_client.g.dart';
 abstract class UserRepo {
   factory UserRepo(Dio dio, {required String baseUrl}) = _UserRepo;
 
-  @POST('/login')
+  @POST('/auth/login')
   Future<HttpResponse> login(@Body() Map<String, dynamic> body);
 
-  @POST('/register')
+  @POST('/auth/register')
   Future<HttpResponse> register(@Body() Map<String, dynamic> body);
   
 }

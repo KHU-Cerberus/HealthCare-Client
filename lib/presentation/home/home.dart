@@ -9,13 +9,7 @@ class HomePage extends StatelessWidget{
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      /* example
-      appBar: AppBar(
-        title: Text('Welcome, $username'),
-      ),
-      body: Center(
-        child: Text('Hello, $username! This is the home page.'),
-      ), */
+      
     );
   }
 }

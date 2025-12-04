@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'user_client.dart';
+part of 'food_api.dart';
 
 // **************************************************************************
 // RetrofitGenerator
@@ -8,8 +8,8 @@ part of 'user_client.dart';
 
 // ignore_for_file: unnecessary_brace_in_string_interps,no_leading_underscores_for_local_identifiers,unused_element
 
-class _UserRepo implements UserRepo {
-  _UserRepo(
+class _FoodApi implements FoodApi {
+  _FoodApi(
     this._dio, {
     this.baseUrl,
     this.errorLogger,
@@ -22,20 +22,20 @@ class _UserRepo implements UserRepo {
   final ParseErrorLogger? errorLogger;
 
   @override
-  Future<HttpResponse<dynamic>> login(Map<String, dynamic> body) async {
+  Future<void> uploadFoodData(Map<String, dynamic> foodData) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
     final _data = <String, dynamic>{};
-    _data.addAll(body);
-    final _options = _setStreamType<HttpResponse<dynamic>>(Options(
+    _data.addAll(foodData);
+    final _options = _setStreamType<void>(Options(
       method: 'POST',
       headers: _headers,
       extra: _extra,
     )
         .compose(
           _dio.options,
-          '/auth/login',
+          '/food/upload',
           queryParameters: queryParameters,
           data: _data,
         )
@@ -44,27 +44,24 @@ class _UserRepo implements UserRepo {
           _dio.options.baseUrl,
           baseUrl,
         )));
-    final _result = await _dio.fetch(_options);
-    final _value = _result.data;
-    final httpResponse = HttpResponse(_value, _result);
-    return httpResponse;
+    await _dio.fetch<void>(_options);
   }
 
   @override
-  Future<HttpResponse<dynamic>> register(Map<String, dynamic> body) async {
+  Future<void> saveFoodData(Map<String, dynamic> foodData) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
     final _data = <String, dynamic>{};
-    _data.addAll(body);
-    final _options = _setStreamType<HttpResponse<dynamic>>(Options(
+    _data.addAll(foodData);
+    final _options = _setStreamType<void>(Options(
       method: 'POST',
       headers: _headers,
       extra: _extra,
     )
         .compose(
           _dio.options,
-          '/auth/register',
+          '/food/save',
           queryParameters: queryParameters,
           data: _data,
         )
@@ -73,10 +70,7 @@ class _UserRepo implements UserRepo {
           _dio.options.baseUrl,
           baseUrl,
         )));
-    final _result = await _dio.fetch(_options);
-    final _value = _result.data;
-    final httpResponse = HttpResponse(_value, _result);
-    return httpResponse;
+    await _dio.fetch<void>(_options);
   }
 
   RequestOptions _setStreamType<T>(RequestOptions requestOptions) {
