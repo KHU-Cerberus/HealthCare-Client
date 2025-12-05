@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'repository.dart';
+part of 'health_report.dart';
 
 // **************************************************************************
 // RetrofitGenerator
@@ -8,8 +8,8 @@ part of 'repository.dart';
 
 // ignore_for_file: unnecessary_brace_in_string_interps,no_leading_underscores_for_local_identifiers,unused_element
 
-class _UserRepo implements UserRepo {
-  _UserRepo(
+class _HealthReportApi implements HealthReportApi {
+  _HealthReportApi(
     this._dio, {
     this.baseUrl,
     this.errorLogger,
@@ -22,20 +22,20 @@ class _UserRepo implements UserRepo {
   final ParseErrorLogger? errorLogger;
 
   @override
-  Future<HttpResponse<dynamic>> login(Map<String, dynamic> body) async {
+  Future<HttpResponse<dynamic>> submitHealthReport(String token) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
-    final _headers = <String, dynamic>{};
-    final _data = <String, dynamic>{};
-    _data.addAll(body);
+    final _headers = <String, dynamic>{r'Authorization': token};
+    _headers.removeWhere((k, v) => v == null);
+    const Map<String, dynamic>? _data = null;
     final _options = _setStreamType<HttpResponse<dynamic>>(Options(
-      method: 'POST',
+      method: 'GET',
       headers: _headers,
       extra: _extra,
     )
         .compose(
           _dio.options,
-          '/login',
+          '/report/record/{day}',
           queryParameters: queryParameters,
           data: _data,
         )
@@ -51,20 +51,23 @@ class _UserRepo implements UserRepo {
   }
 
   @override
-  Future<HttpResponse<dynamic>> register(Map<String, dynamic> body) async {
+  Future<HttpResponse<dynamic>> getHealthReport(
+    String token,
+    String id,
+  ) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
-    final _headers = <String, dynamic>{};
-    final _data = <String, dynamic>{};
-    _data.addAll(body);
+    final _headers = <String, dynamic>{r'Authorization': token};
+    _headers.removeWhere((k, v) => v == null);
+    const Map<String, dynamic>? _data = null;
     final _options = _setStreamType<HttpResponse<dynamic>>(Options(
-      method: 'POST',
+      method: 'GET',
       headers: _headers,
       extra: _extra,
     )
         .compose(
           _dio.options,
-          '/register',
+          '/report/health/{day}',
           queryParameters: queryParameters,
           data: _data,
         )

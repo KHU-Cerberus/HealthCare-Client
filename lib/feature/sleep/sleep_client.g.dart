@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'sleep_api.dart';
+part of 'sleep_client.dart';
 
 // **************************************************************************
 // RetrofitGenerator

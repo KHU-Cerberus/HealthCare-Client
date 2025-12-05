@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:retrofit/retrofit.dart';
-part 'sleep_api.g.dart';
+part 'sleep_client.g.dart';
 
 @RestApi()
 abstract class SleepApi {
