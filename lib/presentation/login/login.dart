@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:health_care/presentation/home/home.dart';
 import 'package:health_care/presentation/login/register.dart';
 import 'package:health_care/presentation/style/colors.dart';
-import 'package:health_care/presentation/login/sleeping_pattern.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:health_care/presentation/home/home.dart';
 
 class LoginPage extends StatefulWidget {
   final String baseUrl;
@@ -97,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => SleepingPatternPage(baseUrl: widget.baseUrl, jwt: accessToken),
+                builder: (context) => HomePage(baseUrl: widget.baseUrl, jwt: accessToken),
               ),
             );
           }
@@ -106,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => SleepingPatternPage(baseUrl: widget.baseUrl, jwt: accessToken),
+              builder: (context) => HomePage(baseUrl: widget.baseUrl, jwt: accessToken),
             ),
           );
         }
