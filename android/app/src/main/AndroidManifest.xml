@@ -13,6 +13,14 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
+        <receiver 
+            android:name=".SleepReceiver" android:exported="true">
+                <intent-filter>
+                    <action 
+                        android:name="com.google.android.gms.location.SLEEP_SEGMENT_UPDATE" />
+                </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

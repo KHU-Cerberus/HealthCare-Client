@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'food_api.dart';
+part of 'food_models.dart';
 
 // **************************************************************************
 // JsonSerializableGenerator

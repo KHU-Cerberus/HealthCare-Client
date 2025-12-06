@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:health_care/feature/user/user_client.dart';
+import 'package:health_care/presentation/sleep/sleep_tracker_page.dart';
 import 'package:health_care/presentation/style/colors.dart';
 import 'package:health_care/presentation/sleep/sleep_log.dart';
 import 'package:health_care/presentation/report/health_report.dart';
@@ -22,7 +23,7 @@ class _HomePageState extends State<HomePage> {
   String? advice;
   bool isLoadingHome = true;
   bool isLoadingAdvice = true;
-  String selectedAdviceType = 'healing';
+  String selectedAdviceType = '1';
   bool hasError = false;
 
   @override
@@ -31,10 +32,13 @@ class _HomePageState extends State<HomePage> {
     _loadHomeData();
     _loadAdvice();
   }
-
   Future<void> _loadHomeData() async {
     try {
-      final dio = Dio();
+      final dio = Dio(BaseOptions(
+        baseUrl: widget.baseUrl,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
       final client = UserRepo(dio, baseUrl: widget.baseUrl);
       final response = await client.getUserHome('Bearer ${widget.jwt}');
       
@@ -64,10 +68,10 @@ class _HomePageState extends State<HomePage> {
         receiveTimeout: const Duration(seconds: 10),
       ));
       final client = UserRepo(dio, baseUrl: widget.baseUrl);
-      final response = await client.getUserAdvice('Bearer ${widget.jwt}');
+      final response = await client.getUserAdvice('Bearer ${widget.jwt}', selectedAdviceType);
       
       setState(() {
-        advice = response.data['data']['advice'];
+        advice = response.data['data']['comment'];
         isLoadingAdvice = false;
       });
     } catch (e) {
@@ -106,7 +110,13 @@ class _HomePageState extends State<HomePage> {
 
   String _formatSleepTime(String time) {
     if (time.length == 4) {
-      return '${time.substring(0, 1)}시간 ${time.substring(2, 4)}분';
+      if (time.startsWith('00')) {
+        return '${time.substring(2, 4)}분';
+      }
+      if (time.startsWith('0')){
+        return '${time.substring(1, 2)}시간 ${time.substring(2, 4)}분';
+      }
+      return '${time.substring(0, 2)}시간 ${time.substring(2, 4)}분';
     }
     return time;
   }
@@ -115,7 +125,8 @@ class _HomePageState extends State<HomePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => SleepLogPage(baseUrl: widget.baseUrl, jwt: widget.jwt),
+        // builder: (context) => SleepLogPage(baseUrl: widget.baseUrl, jwt: widget.jwt),
+        builder: (context) => SleepTrackerPage(baseUrl: widget.baseUrl, jwt: widget.jwt),
       ),
     );
   }
@@ -184,7 +195,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       Text(
-                        '${homeData?['nickname'] ?? 'Cerberus'}님',
+                        '${homeData?['nickname']?? ""}님',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -268,7 +279,7 @@ class _HomePageState extends State<HomePage> {
                             _formatSleepTime(
                                 homeData?['sleepTime'] ?? '0437'),
                             style: const TextStyle(
-                              fontSize: 32,
+                              fontSize: 26,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -385,11 +396,11 @@ class _HomePageState extends State<HomePage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildAdviceTypeButton('힐링형', 'healing'),
+                  _buildAdviceTypeButton('힐링형', '1'),
                   const SizedBox(width: 12),
-                  _buildAdviceTypeButton('유머형', 'humor'),
+                  _buildAdviceTypeButton('유머형', '2'),
                   const SizedBox(width: 12),
-                  _buildAdviceTypeButton('코치형', 'coach'),
+                  _buildAdviceTypeButton('코치형', '3'),
                 ],
               ),
               const SizedBox(height: 16),
@@ -404,7 +415,7 @@ class _HomePageState extends State<HomePage> {
                   isLoadingAdvice
                       ? '생각중...'
                       : advice ??
-                          '${homeData?['nickname'] ?? 'Cerberus'}님, 오늘은 일찍 주무시는 거 어떨까요?😊',
+                          '생각중...',
                   style: const TextStyle(fontSize: 14),
                 ),
               ),

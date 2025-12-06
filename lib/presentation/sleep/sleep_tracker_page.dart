@@ -37,6 +37,7 @@ class SleepTracker {
   Future<List<SleepSegment>> getSleepData(int days) async {
     try {
       final List<dynamic> result = await platform.invokeMethod('getSleepData', {'days': days});
+      print("Received ${result.length} segments from native"); // 디버그 로그
       return result.map((data) => SleepSegment.fromMap(data)).toList();
     } on PlatformException catch (e) {
       print("Failed to get sleep data: ${e.message}");
@@ -48,7 +49,7 @@ class SleepTracker {
 class SleepSegment {
   final DateTime startTime;
   final DateTime endTime;
-  final int status; // 1: 깨어있음, 2: 수면중
+  final int status; // 0: 깨어있음, 1: 수면중 (Google Sleep API 기준)
 
   SleepSegment({
     required this.startTime,
@@ -64,7 +65,9 @@ class SleepSegment {
     );
   }
 
-  String get statusText => status == 2 ? '수면' : '깨어있음';
+  // Google Sleep API: status 1 = 수면 중, status 0 = 깨어있음
+  String get statusText => status == 1 ? '수면' : '깨어있음';
+  bool get isSleeping => status == 1;
   
   Duration get duration => endTime.difference(startTime);
   
@@ -101,6 +104,10 @@ class DailySleepStats {
 
 // 사용 예시 - 개선된 UI
 class SleepTrackerPage extends StatefulWidget {
+  final String baseUrl;
+  final String jwt;
+  const SleepTrackerPage({super.key, required this.baseUrl, required this.jwt});
+  
   @override
   _SleepTrackerPageState createState() => _SleepTrackerPageState();
 }
@@ -155,7 +162,15 @@ class _SleepTrackerPageState extends State<SleepTrackerPage> {
     setState(() => _isLoading = true);
     
     final data = await _sleepTracker.getSleepData(7);
+    print("Loaded ${data.length} sleep segments"); // 디버그 로그
+    
+    // 각 세그먼트 정보 출력
+    for (var segment in data) {
+      print("Segment: ${segment.statusText}, Start: ${segment.startTime}, Duration: ${segment.duration}");
+    }
+    
     final stats = _calculateDailyStats(data);
+    print("Calculated ${stats.length} daily stats"); // 디버그 로그
     
     setState(() {
       _sleepData = data;
@@ -168,12 +183,15 @@ class _SleepTrackerPageState extends State<SleepTrackerPage> {
     final Map<String, List<SleepSegment>> groupedByDate = {};
     
     for (var segment in segments) {
-      if (segment.status == 2) { // 수면 중인 세그먼트만
+      // Google Sleep API: status 1 = 수면 중
+      if (segment.status == 1) {
         final dateKey = '${segment.startTime.year}-${segment.startTime.month}-${segment.startTime.day}';
         groupedByDate.putIfAbsent(dateKey, () => []);
         groupedByDate[dateKey]!.add(segment);
       }
     }
+    
+    print("Grouped into ${groupedByDate.length} days"); // 디버그 로그
     
     return groupedByDate.entries.map((entry) {
       final segments = entry.value;
@@ -255,11 +273,21 @@ class _SleepTrackerPageState extends State<SleepTrackerPage> {
             ),
           ),
 
+          // 디버그 정보 표시
+          if (_sleepData.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                '총 ${_sleepData.length}개 세그먼트 (수면: ${_sleepData.where((s) => s.status == 1).length}, 깨어있음: ${_sleepData.where((s) => s.status == 0).length})',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+
           // 로딩 또는 데이터 표시
           Expanded(
             child: _isLoading
                 ? Center(child: CircularProgressIndicator())
-                : _dailyStats.isEmpty
+                : _sleepData.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -279,40 +307,82 @@ class _SleepTrackerPageState extends State<SleepTrackerPage> {
                           ],
                         ),
                       )
-                    : ListView.builder(
-                        itemCount: _dailyStats.length,
-                        itemBuilder: (context, index) {
-                          final stat = _dailyStats[index];
-                          return Card(
-                            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                child: Icon(Icons.bedtime),
-                              ),
-                              title: Text(
-                                '${stat.date.month}월 ${stat.date.day}일',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(height: 4),
-                                  Text('총 수면: ${stat.formattedSleepTime}'),
-                                  if (stat.firstSleepTime != null)
-                                    Text(
-                                      '취침: ${stat.firstSleepTime!.hour}:${stat.firstSleepTime!.minute.toString().padLeft(2, '0')}',
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                ],
-                              ),
-                              trailing: Text(
-                                '${stat.sleepSegmentCount}회',
-                                style: TextStyle(color: Colors.grey),
-                              ),
+                    : _dailyStats.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline, size: 64, color: Colors.orange),
+                                SizedBox(height: 16),
+                                Text(
+                                  '${_sleepData.length}개의 세그먼트가 있지만',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                                Text(
+                                  '수면 데이터가 없습니다',
+                                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                                ),
+                                SizedBox(height: 16),
+                                // 모든 세그먼트 표시 (디버깅용)
+                                Expanded(
+                                  child: ListView.builder(
+                                    itemCount: _sleepData.length,
+                                    itemBuilder: (context, index) {
+                                      final segment = _sleepData[index];
+                                      return ListTile(
+                                        leading: Icon(
+                                          segment.isSleeping ? Icons.bedtime : Icons.wb_sunny,
+                                          color: segment.isSleeping ? Colors.blue : Colors.orange,
+                                        ),
+                                        title: Text(segment.statusText),
+                                        subtitle: Text(
+                                          '${segment.startTime.month}/${segment.startTime.day} '
+                                          '${segment.startTime.hour}:${segment.startTime.minute.toString().padLeft(2, '0')} - '
+                                          '${segment.endTime.hour}:${segment.endTime.minute.toString().padLeft(2, '0')}\n'
+                                          '기간: ${segment.duration.inHours}시간 ${segment.duration.inMinutes % 60}분',
+                                        ),
+                                        trailing: Text('Status: ${segment.status}'),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.builder(
+                            itemCount: _dailyStats.length,
+                            itemBuilder: (context, index) {
+                              final stat = _dailyStats[index];
+                              return Card(
+                                margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    child: Icon(Icons.bedtime),
+                                  ),
+                                  title: Text(
+                                    '${stat.date.month}월 ${stat.date.day}일',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(height: 4),
+                                      Text('총 수면: ${stat.formattedSleepTime}'),
+                                      if (stat.firstSleepTime != null)
+                                        Text(
+                                          '취침: ${stat.firstSleepTime!.hour}:${stat.firstSleepTime!.minute.toString().padLeft(2, '0')}',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                    ],
+                                  ),
+                                  trailing: Text(
+                                    '${stat.sleepSegmentCount}회',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),

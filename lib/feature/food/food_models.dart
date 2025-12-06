@@ -1,6 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 
-part 'food_api.g.dart';
+part 'food_models.g.dart';
 
 @JsonSerializable()
 class FoodUploadResponse {
