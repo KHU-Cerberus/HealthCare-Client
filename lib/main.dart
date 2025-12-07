@@ -4,7 +4,6 @@ import 'package:health_care/presentation/login/login.dart';
 import 'core/camera/camera_config.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras(); // 사용 가능한 카메라 목록 가져오기
