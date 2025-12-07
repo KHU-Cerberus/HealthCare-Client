@@ -1,30 +1,27 @@
-# Gson specific classes
+# Gson
 -keepattributes Signature
 -keepattributes *Annotation*
 -dontwarn sun.misc.**
+-keep class com.google.gson.** { *; }
+-keep class * implements com.google.gson.TypeAdapter
+-keep class * implements com.google.gson.TypeAdapterFactory
+-keep class * implements com.google.gson.JsonSerializer
+-keep class * implements com.google.gson.JsonDeserializer
 
-# Gson uses generic type information stored in a class file when working with fields
--keepattributes Signature
-
-# Keep generic signature of TypeToken
--keep class com.google.gson.reflect.TypeToken { *; }
--keep class * extends com.google.gson.reflect.TypeToken
-
-# Keep all model classes
+# Keep data classes for Gson
 -keep class com.example.health_care.SleepSegmentData { *; }
 
-# Keep Gson annotations
--keep class com.google.gson.annotations.** { *; }
+# Health Connect
+-keep class androidx.health.connect.client.** { *; }
+-keep class androidx.health.connect.client.records.** { *; }
 
-# Prevent R8 from leaving Data object members always null
--keepclassmembers,allowobfuscation class * {
-  @com.google.gson.annotations.SerializedName <fields>;
+# Google Play Services
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.android.gms.**
+
+# Kotlin Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
 }
-
-# Retain generic signatures of TypeToken and its subclasses
--keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
--keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
-
-# Sleep API classes
--keep class com.google.android.gms.location.** { *; }
--keep interface com.google.android.gms.location.** { *; }

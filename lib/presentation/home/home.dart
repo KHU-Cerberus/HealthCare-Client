@@ -108,19 +108,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  String _formatSleepTime(String time) {
-    if (time.length == 4) {
-      if (time.startsWith('00')) {
-        return '${time.substring(2, 4)}분';
-      }
-      if (time.startsWith('0')){
-        return '${time.substring(1, 2)}시간 ${time.substring(2, 4)}분';
-      }
-      return '${time.substring(0, 2)}시간 ${time.substring(2, 4)}분';
-    }
-    return time;
-  }
-
   void _checkSleepLog() {
     Navigator.push(
       context,
@@ -276,7 +263,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                                '${homeData?['sleepHours'] ?? '0'}시간 ${homeData?['sleepMinutes'] ?? '0'}분',
+                                '${homeData?['sleepHours'] ?? ''}시간 ${homeData?['sleepMinutes'] ?? ''}분',
                             style: const TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,

@@ -11,6 +11,11 @@ import android.util.Log
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.time.TimeRangeFilter
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.location.ActivityRecognition
@@ -21,16 +26,40 @@ import com.google.gson.Gson
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.health_care/tracker"
     private val ACTIVITY_RECOGNITION_REQUEST_CODE = 100
+    private val HEALTH_CONNECT_REQUEST_CODE = 101
+    
     private lateinit var methodChannel: MethodChannel
     private var pendingResult: MethodChannel.Result? = null
+    private var healthConnectClient: HealthConnectClient? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+       
+        // Health Connect 클라이언트 초기화
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // API 34+
+            try {
+                // SDK 상태 확인
+                val providerPackageName = HealthConnectClient.getSdkStatus(this, "com.google.android.apps.healthdata")
+                if (providerPackageName == HealthConnectClient.SDK_AVAILABLE) {
+                    healthConnectClient = HealthConnectClient.getOrCreate(this)
+                    Log.d("SleepTracker", "Health Connect client initialized")
+                } else {
+                    Log.e("SleepTracker", "Health Connect SDK not available: $providerPackageName")
+                }
+            } catch (e: Exception) {
+                Log.e("SleepTracker", "Failed to initialize Health Connect: ${e.message}")
+            }
+        }
        
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel.setMethodCallHandler { call, result ->
@@ -46,10 +75,10 @@ class MainActivity: FlutterActivity() {
                     getSleepData(days, result)
                 }
                 "checkPermissions" -> {
-                    result.success(hasActivityRecognitionPermission())
+                    result.success(hasAllPermissions())
                 }
                 "requestPermissions" -> {
-                    requestActivityRecognitionPermission(result)
+                    requestAllPermissions(result)
                 }
                 else -> {
                     result.notImplemented()
@@ -65,12 +94,28 @@ class MainActivity: FlutterActivity() {
                 Manifest.permission.ACTIVITY_RECOGNITION
             ) == PackageManager.PERMISSION_GRANTED
         } else {
-            true // Permission not needed for Android 9 and below
+            true
         }
     }
 
-    private fun requestActivityRecognitionPermission(result: MethodChannel.Result) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    private fun hasAllPermissions(): Boolean {
+        // Android 14+ (API 34+)는 Health Connect 권한만 체크
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Health Connect 권한은 런타임에 직접 체크 불가능
+            // Health Connect SDK를 통해서만 확인 가능
+            return healthConnectClient != null
+        }
+        
+        // Android 13 이하는 Activity Recognition 권한만
+        return hasActivityRecognitionPermission()
+    }
+
+    private fun requestAllPermissions(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Health Connect 권한 요청
+            requestHealthConnectPermission(result)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10-13: Activity Recognition 권한 요청
             if (hasActivityRecognitionPermission()) {
                 result.success(true)
             } else {
@@ -83,6 +128,35 @@ class MainActivity: FlutterActivity() {
             }
         } else {
             result.success(true)
+        }
+    }
+
+    private fun requestHealthConnectPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            if (healthConnectClient == null) {
+                result.error("HEALTH_CONNECT_UNAVAILABLE", 
+                    "Health Connect is not available on this device", null)
+                return
+            }
+
+            val permissions = setOf(
+                HealthPermission.getReadPermission(SleepSessionRecord::class),
+                HealthPermission.getWritePermission(SleepSessionRecord::class)
+            )
+
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    // Health Connect 권한 요청 Intent 생성
+                    val intent = HealthConnectClient.getHealthConnectManageDataIntent(this@MainActivity)
+                    pendingResult = result
+                    startActivityForResult(intent, HEALTH_CONNECT_REQUEST_CODE)
+                } catch (e: Exception) {
+                    Log.e("SleepTracker", "Failed to request Health Connect permission: ${e.message}")
+                    result.error("PERMISSION_REQUEST_FAILED", e.message, null)
+                }
+            }
+        } else {
+            result.success(false)
         }
     }
 
@@ -101,6 +175,16 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        if (requestCode == HEALTH_CONNECT_REQUEST_CODE) {
+            // Health Connect 권한 결과 - 항상 성공으로 처리 (실제 권한은 사용 시 확인)
+            pendingResult?.success(true)
+            pendingResult = null
+        }
+    }
+
     private fun checkGooglePlayServices(): Boolean {
         val googleApiAvailability = GoogleApiAvailability.getInstance()
         val resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this)
@@ -108,6 +192,14 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun subscribeSleepUpdates(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Health Connect 사용 (백그라운드 구독 불필요)
+            Log.d("SleepTracker", "Android 14+: Using Health Connect (no subscription needed)")
+            result.success(true)
+            return
+        }
+
+        // Android 13 이하: 기존 Sleep API 사용
         if (!checkGooglePlayServices()) {
             result.error("PLAY_SERVICES_UNAVAILABLE", 
                 "Google Play Services is not available", null)
@@ -136,7 +228,7 @@ class MainActivity: FlutterActivity() {
                 )
 
             task.addOnSuccessListener {
-                Log.d("SleepTracker", "Successfully subscribed to sleep updates")
+                Log.d("SleepTracker", "Successfully subscribed to sleep updates (Android 13-)")
                 result.success(true)
             }
 
@@ -151,6 +243,12 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun unsubscribeSleepUpdates(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Health Connect (구독 해제 불필요)
+            result.success(true)
+            return
+        }
+
         try {
             val intent = Intent(this, SleepReceiver::class.java)
             val pendingIntent = PendingIntent.getBroadcast(
@@ -179,30 +277,80 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun getSleepData(days: Int, result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Health Connect에서 데이터 가져오기
+            getSleepDataFromHealthConnect(days, result)
+        } else {
+            // Android 13 이하: SharedPreferences에서 가져오기
+            getSleepDataFromSharedPreferences(days, result)
+        }
+    }
+
+    private fun getSleepDataFromHealthConnect(days: Int, result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            result.error("API_NOT_SUPPORTED", "Health Connect requires Android 14+", null)
+            return
+        }
+
+        if (healthConnectClient == null) {
+            result.error("HEALTH_CONNECT_UNAVAILABLE", 
+                "Health Connect is not available", null)
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val endTime = Instant.now()
+                val startTime = endTime.minusSeconds(TimeUnit.DAYS.toSeconds(days.toLong()))
+
+                val request = ReadRecordsRequest(
+                    recordType = SleepSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
+
+                val response = healthConnectClient!!.readRecords(request)
+                val sleepSessions = response.records
+
+                Log.d("SleepTracker", "Retrieved ${sleepSessions.size} sleep sessions from Health Connect")
+
+                val segmentMaps = sleepSessions.map { session ->
+                    val startMillis = session.startTime.toEpochMilli()
+                    val endMillis = session.endTime.toEpochMilli()
+                    
+                    mapOf(
+                        "startTime" to startMillis,
+                        "endTime" to endMillis,
+                        "status" to 1 // 수면 상태 (Health Connect는 모두 수면)
+                    )
+                }
+
+                withContext(Dispatchers.Main) {
+                    result.success(segmentMaps)
+                }
+            } catch (e: Exception) {
+                Log.e("SleepTracker", "Failed to get Health Connect data: ${e.message}")
+                e.printStackTrace()
+                
+                withContext(Dispatchers.Main) {
+                    result.error("GET_DATA_FAILED", e.message, null)
+                }
+            }
+        }
+    }
+
+    private fun getSleepDataFromSharedPreferences(days: Int, result: MethodChannel.Result) {
         try {
             val prefs = getSharedPreferences("sleep_data", Context.MODE_PRIVATE)
             val sleepDataJson = prefs.getString("segments", "[]") ?: "[]"
            
             val gson = Gson()
-            
-            // TypeToken 대신 Array로 파싱 후 List로 변환 (ProGuard-safe)
             val segmentsArray = gson.fromJson(sleepDataJson, Array<SleepSegmentData>::class.java)
             val allSegments = segmentsArray?.toList() ?: emptyList()
            
-            // 최근 N일 데이터만 필터링
             val cutoffTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days.toLong())
             val filteredSegments = allSegments.filter { it.startTime >= cutoffTime }
            
-            // Map으로 변환하여 Flutter에 전달
             val segmentMaps = filteredSegments.map {
-                val start = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                    .format(java.util.Date(it.startTime))
-                val end = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                    .format(java.util.Date(it.endTime))
-                val durationHours = (it.endTime - it.startTime) / (1000 * 60 * 60.0)
-                
-                Log.d("SleepTracker", "Segment: status=${it.status}, start=$start, end=$end, duration=${String.format("%.2f", durationHours)}h")
-                
                 mapOf(
                     "startTime" to it.startTime,
                     "endTime" to it.endTime,
@@ -210,7 +358,7 @@ class MainActivity: FlutterActivity() {
                 )
             }
            
-            Log.d("SleepTracker", "Retrieved ${segmentMaps.size} sleep segments")
+            Log.d("SleepTracker", "Retrieved ${segmentMaps.size} sleep segments from SharedPreferences")
             result.success(segmentMaps)
         } catch (e: Exception) {
             Log.e("SleepTracker", "Failed to get sleep data: ${e.message}")
@@ -227,7 +375,7 @@ data class SleepSegmentData(
     val status: Int
 )
 
-// BroadcastReceiver - Sleep API 이벤트 수신
+// BroadcastReceiver - Sleep API 이벤트 수신 (Android 13 이하만 사용)
 class SleepReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null || intent == null) {
@@ -245,7 +393,6 @@ class SleepReceiver : BroadcastReceiver() {
             if (SleepClassifyEvent.hasEvents(intent)) {
                 val sleepClassifyEvents = SleepClassifyEvent.extractEvents(intent)
                 Log.d("SleepTracker", "Received ${sleepClassifyEvents.size} sleep classify events")
-                processSleepClassifications(context, sleepClassifyEvents)
             }
         } catch (e: Exception) {
             Log.e("SleepTracker", "Error processing sleep events: ${e.message}")
@@ -257,13 +404,11 @@ class SleepReceiver : BroadcastReceiver() {
             val prefs = context.getSharedPreferences("sleep_data", Context.MODE_PRIVATE)
             val gson = Gson()
            
-            // 기존 데이터 불러오기 - Array로 파싱 (ProGuard-safe)
             val existingDataJson = prefs.getString("segments", "[]") ?: "[]"
             val segmentsArray = gson.fromJson(existingDataJson, Array<SleepSegmentData>::class.java)
             val segments: MutableList<SleepSegmentData> = segmentsArray?.toMutableList() 
                 ?: mutableListOf()
            
-            // 새 이벤트 추가
             events.forEach { event ->
                 val newSegment = SleepSegmentData(
                     startTime = event.startTimeMillis,
@@ -273,12 +418,10 @@ class SleepReceiver : BroadcastReceiver() {
                 segments.add(newSegment)
             }
            
-            // 중복 제거 및 시간순 정렬
             val uniqueSegments = segments
                 .distinctBy { it.startTime }
                 .sortedBy { it.startTime }
            
-            // 저장
             val editor = prefs.edit()
             editor.putString("segments", gson.toJson(uniqueSegments))
             editor.apply()
@@ -287,18 +430,6 @@ class SleepReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e("SleepTracker", "Error saving sleep segments: ${e.message}")
             e.printStackTrace()
-        }
-    }
-
-    private fun processSleepClassifications(context: Context, events: List<SleepClassifyEvent>) {
-        try {
-            events.forEach { event ->
-                Log.d("SleepTracker",
-                    "Sleep classification - Confidence: ${event.confidence}, " +
-                    "Light: ${event.light}, Motion: ${event.motion}")
-            }
-        } catch (e: Exception) {
-            Log.e("SleepTracker", "Error processing classifications: ${e.message}")
         }
     }
 }
