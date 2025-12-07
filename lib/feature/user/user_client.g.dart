@@ -109,7 +109,10 @@ class _UserRepo implements UserRepo {
   }
 
   @override
-  Future<HttpResponse<dynamic>> getUserAdvice(String token) async {
+  Future<HttpResponse<dynamic>> getUserAdvice(
+    String token,
+    String type,
+  ) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{r'Authorization': token};
@@ -122,7 +125,7 @@ class _UserRepo implements UserRepo {
     )
         .compose(
           _dio.options,
-          '/user/home/advice/{type}',
+          '/user/home/advice/${type}',
           queryParameters: queryParameters,
           data: _data,
         )

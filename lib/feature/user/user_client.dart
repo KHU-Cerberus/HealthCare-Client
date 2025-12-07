@@ -16,5 +16,8 @@ abstract class UserRepo {
   Future<HttpResponse> getUserHome(@Header('Authorization') String token);
 
   @GET('/user/home/advice/{type}')
-  Future<HttpResponse> getUserAdvice(@Header('Authorization') String token);
+  Future<HttpResponse> getUserAdvice(
+    @Header('Authorization') String token,
+    @Path('type') String type);
+    
 }

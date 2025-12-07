@@ -20,7 +20,7 @@ class _SettingHomePageState extends State<SettingHomePage> {
         title: const Text('Settings'),
       ),
       body: Center(
-        child: Text('Settings Page - Base URL: $widget.baseUrl'),
+        child: Text('Settings Page - Base URL: ${widget.baseUrl}'),
       ),
     bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
